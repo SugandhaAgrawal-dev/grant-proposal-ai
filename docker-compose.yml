@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: grant_proposal_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: grant_proposal_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: grant_proposal_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: grant_proposal_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
+  backend:
+    build: ./backend
+    container_name: grant_proposal_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/grant_proposal_db
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://ollama:11434
+      DEBUG: "true"
+    volumes:
+      - ./backend:/app
+      - media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python manage.py runserver 0.0.0.0:8000
+
+  celery:
+    build: ./backend
+    container_name: grant_proposal_celery
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/grant_proposal_db
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://ollama:11434
+    volumes:
+      - ./backend:/app
+      - media:/app/media
+    depends_on:
+      - backend
+      - redis
+    command: celery -A config worker --loglevel=info
+
+  frontend:
+    build: ./frontend
+    container_name: grant_proposal_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/src:/app/src
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+
+volumes:
+  pgdata:
+  ollama_models:
+  media:
