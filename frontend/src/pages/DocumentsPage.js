@@ -13,8 +13,8 @@ export default function DocumentsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['docs'],
     queryFn: () => documentsApi.list().then(r => r.data.results || r.data),
-    refetchInterval: (data) =>
-      (data || []).some(d => d.status === 'parsing') ? 3000 : false,
+    refetchInterval: (query) =>
+      Array.isArray(query?.state?.data) && query.state.data.some(d => d.status === 'parsing') ? 3000 : false,
   });
 
   const deleteMutation = useMutation({

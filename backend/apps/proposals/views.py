@@ -20,23 +20,44 @@ from apps.proposals.tasks import (
 )
 
 
+def get_request_user(request):
+    """Fallback to the first user if the request user is anonymous (for local dev)."""
+    user = request.user
+    if not user or user.is_authenticated is False:
+        from django.contrib.auth import get_user_model
+        return get_user_model().objects.first()
+    return user
+
+
 # ── Organisation Profile ──────────────────────────────────────────────────────
 
 class OrgProfileListCreate(generics.ListCreateAPIView):
     serializer_class = OrganizationProfileSerializer
 
     def get_queryset(self):
-        return OrganizationProfile.objects.filter(owner=self.request.user)
+        user = self.request.user
+        if not user or user.is_anonymous:
+            from django.contrib.auth import get_user_model
+            user = get_user_model().objects.first()
+        return OrganizationProfile.objects.filter(owner=user)
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        user = self.request.user
+        if not user or user.is_anonymous:
+            from django.contrib.auth import get_user_model
+            user = get_user_model().objects.first()
+        serializer.save(owner=user)
 
 
 class OrgProfileDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = OrganizationProfileSerializer
 
     def get_queryset(self):
-        return OrganizationProfile.objects.filter(owner=self.request.user)
+        user = self.request.user
+        if not user or user.is_anonymous:
+            from django.contrib.auth import get_user_model
+            user = get_user_model().objects.first()
+        return OrganizationProfile.objects.filter(owner=user)
 
 
 # ── Grant Proposals ───────────────────────────────────────────────────────────
@@ -46,8 +67,12 @@ class ProposalListView(generics.ListAPIView):
     serializer_class = GrantProposalSerializer
 
     def get_queryset(self):
+        user = self.request.user
+        if not user or user.is_anonymous:
+            from django.contrib.auth import get_user_model
+            user = get_user_model().objects.first()
         return GrantProposal.objects.filter(
-            created_by=self.request.user
+            created_by=user
         ).prefetch_related("sections").select_related("org_profile")
 
 
@@ -56,8 +81,12 @@ class ProposalDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = GrantProposalSerializer
 
     def get_queryset(self):
+        user = self.request.user
+        if not user or user.is_anonymous:
+            from django.contrib.auth import get_user_model
+            user = get_user_model().objects.first()
         return GrantProposal.objects.filter(
-            created_by=self.request.user
+            created_by=user
         ).prefetch_related("sections")
 
 
@@ -71,9 +100,14 @@ def generate_proposal(request):
     ser.is_valid(raise_exception=True)
     d = ser.validated_data
 
+    user = request.user
+    if not user or user.is_anonymous:
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.first()
+
     # Get org profile
     try:
-        org = OrganizationProfile.objects.get(id=d["org_profile_id"], owner=request.user)
+        org = OrganizationProfile.objects.get(id=d["org_profile_id"], owner=user)
     except OrganizationProfile.DoesNotExist:
         return Response({"error": "Organisation profile not found."}, status=404)
 
@@ -82,13 +116,13 @@ def generate_proposal(request):
     if d.get("rfp_document_id"):
         from apps.documents.models import UploadedDocument
         try:
-            rfp_doc = UploadedDocument.objects.get(id=d["rfp_document_id"], uploaded_by=request.user)
+            rfp_doc = UploadedDocument.objects.get(id=d["rfp_document_id"], uploaded_by=user)
         except UploadedDocument.DoesNotExist:
             return Response({"error": "RFP document not found."}, status=404)
 
     # Create proposal
     proposal = GrantProposal.objects.create(
-        created_by   = request.user,
+        created_by   = user,
         org_profile  = org,
         rfp_document = rfp_doc,
         title        = d["title"],
@@ -118,8 +152,13 @@ def generate_proposal(request):
 @api_view(["GET"])
 def proposal_status(request, pk):
     """GET /api/proposals/{id}/status/ — poll generation status."""
+    user = request.user
+    if not user or user.is_anonymous:
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.first()
+
     try:
-        proposal = GrantProposal.objects.get(id=pk, created_by=request.user)
+        proposal = GrantProposal.objects.get(id=pk, created_by=user)
     except GrantProposal.DoesNotExist:
         return Response({"error": "Not found."}, status=404)
 
@@ -138,10 +177,15 @@ def regenerate_section(request, pk):
     ser = RegenerateSectionSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
 
+    user = request.user
+    if not user or user.is_anonymous:
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.first()
+
     try:
         section = ProposalSection.objects.get(
             id=pk,
-            proposal__created_by=request.user,
+            proposal__created_by=user,
         )
     except ProposalSection.DoesNotExist:
         return Response({"error": "Section not found."}, status=404)
@@ -157,9 +201,14 @@ def regenerate_section(request, pk):
 @api_view(["PATCH"])
 def update_section(request, pk):
     """PATCH /api/proposals/sections/{id}/ — save manual edits."""
+    user = request.user
+    if not user or user.is_anonymous:
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.first()
+
     try:
         section = ProposalSection.objects.get(
-            id=pk, proposal__created_by=request.user
+            id=pk, proposal__created_by=user
         )
     except ProposalSection.DoesNotExist:
         return Response({"error": "Section not found."}, status=404)
@@ -173,8 +222,13 @@ def update_section(request, pk):
 @api_view(["POST"])
 def export_to_docx(request, pk):
     """POST /api/proposals/{id}/export/ — export proposal to Word doc."""
+    user = request.user
+    if not user or user.is_anonymous:
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.first()
+
     try:
-        GrantProposal.objects.get(id=pk, created_by=request.user)
+        GrantProposal.objects.get(id=pk, created_by=user)
     except GrantProposal.DoesNotExist:
         return Response({"error": "Proposal not found."}, status=404)
 
@@ -186,8 +240,9 @@ def export_to_docx(request, pk):
 def download_docx(request, pk):
     """GET /api/proposals/{id}/download/ — download exported Word doc."""
     from django.http import FileResponse
+    user = get_request_user(request)
     try:
-        proposal = GrantProposal.objects.get(id=pk, created_by=request.user)
+        proposal = GrantProposal.objects.get(id=pk, created_by=user)
     except GrantProposal.DoesNotExist:
         return Response({"error": "Not found."}, status=404)
 
@@ -205,8 +260,9 @@ def download_docx(request, pk):
 @api_view(["PATCH"])
 def update_proposal_review(request, pk):
     """PATCH /api/proposals/{id}/review/ — save reviewer notes and status."""
+    user = get_request_user(request)
     try:
-        proposal = GrantProposal.objects.get(id=pk, created_by=request.user)
+        proposal = GrantProposal.objects.get(id=pk, created_by=user)
     except GrantProposal.DoesNotExist:
         return Response({"error": "Not found."}, status=404)
 

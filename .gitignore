@@ -27,4 +27,6 @@ frontend/.env
 
 # Logs
 *.log
+*.txt
 celerybeat-schedule
+.gemini/

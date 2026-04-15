@@ -9,8 +9,8 @@ export default function ProposalsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['proposals'],
     queryFn: () => proposalsApi.list().then(r => r.data.results || r.data),
-    refetchInterval: (data) =>
-      (data || []).some(p => p.status === 'generating') ? 4000 : false,
+    refetchInterval: (query) =>
+      Array.isArray(query?.state?.data) && query.state.data.some(p => p.status === 'generating') ? 4000 : false,
   });
 
   if (isLoading) return <Spinner />;
