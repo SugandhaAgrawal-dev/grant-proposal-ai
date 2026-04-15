@@ -165,7 +165,7 @@ ollama pull llama3.1:8b
 ollama pull nomic-embed-text
 
 # Set in .env
-DEFAULT_LLM_PROVIDER=ollama
+DEFAULT_LLM_PROVIDER=vertex
 ```
 
 ### 6 — Start the backend
@@ -382,7 +382,7 @@ No key file needed — automatic credential injection.
 
 ```env
 DEFAULT_LLM_PROVIDER=vertex
-GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_PROJECT=project-daf53a30-c606-4e89-afa ##your-gcp-project-id
 GOOGLE_CLOUD_LOCATION=us-central1
 VERTEX_LLM_MODEL=gemini-1.5-pro-002
 VERTEX_EMBED_MODEL=text-embedding-004
